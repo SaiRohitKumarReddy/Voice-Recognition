@@ -5,8 +5,10 @@ transformers
 torch
 torchvision
 torchaudio
-soundfile
+PySoundFile
+libsndfile1
 librosa
 pydub
 audio-recorder-streamlit
 edge-tts
+numpy
