@@ -6,15 +6,13 @@ import tempfile
 import base64
 import uuid
 import logging
-import soundfile as sf
-import subprocess
 import sys
 import io
 import numpy as np
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
-# --- Page Configuration (Full Width) ---
+# --- Page Configuration ---
 st.set_page_config(
     page_title="🎙️ Voice AI Assistant",
     page_icon="🎙️",
@@ -22,79 +20,108 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- Auto-install missing packages ---
-def install_and_import(package, package_name=None):
+# --- Auto-install missing packages with system-level support ---
+def install_and_import(package, package_name=None, system_package=None):
     package_name = package_name or package
     try:
         __import__(package_name)
         return True
     except ImportError:
         try:
+            # If a system package is needed (e.g., libsndfile for soundfile)
+            if system_package:
+                st.info(f"🔧 Installing system dependency: {system_package}")
+                subprocess.run(["apt-get", "update"], check=True)
+                subprocess.run(["apt-get", "install", "-y", system_package], check=True)
+            
+            st.info(f"📦 Installing Python package: {package}")
             subprocess.check_call([sys.executable, "-m", "pip", "install", package])
             return True
-        except Exception:
+        except Exception as e:
+            st.error(f"❌ Failed to install {package}: {str(e)}")
             return False
 
+# Required packages with optional system dependencies
 required_packages = {
-    "groq": "groq",
-    "transformers": "transformers",
-    "torch": "torch",
-    "soundfile": "soundfile",
-    "librosa": "librosa",
-    "pydub": "pydub",
-    "audio-recorder-streamlit": "audio_recorder_streamlit",
-    "edge-tts": "edge_tts"
+    "groq": ("groq", None),
+    "transformers": ("transformers", None),
+    "torch": ("torch", None),
+    "soundfile": ("PySoundFile", "libsndfile1"),  # PySoundFile is the package, libsndfile1 is system dep
+    "librosa": ("librosa", None),
+    "pydub": ("pydub", None),
+    "audio_recorder_streamlit": ("audio_recorder_streamlit", None),
+    "edge_tts": ("edge-tts", None),
 }
 
-for pkg, imp in required_packages.items():
+# Install all required packages
+for pkg, (imp, sys_pkg) in required_packages.items():
     if pkg not in sys.modules:
-        install_and_import(pkg, imp)
+        success = install_and_import(pkg, imp, sys_pkg)
+        if not success:
+            st.error(f"🚨 Critical failure installing: {pkg}")
+            st.stop()
 
-# --- Import torch AFTER auto-install ---
+# --- Import after installation ---
+try:
+    import soundfile as sf
+    SNDFILE_AVAILABLE = True
+except ImportError:
+    SNDFILE_AVAILABLE = False
+    st.error("❌ Failed to load soundfile even after installation.")
+    st.stop()
+
 try:
     import torch
     TORCH_AVAILABLE = True
 except ImportError:
     TORCH_AVAILABLE = False
-    st.error("Failed to install/import torch package")
+    st.error("❌ Failed to import torch")
+    st.stop()
 
-# --- Now import groq after installation ---
 try:
     from groq import Groq
     GROQ_AVAILABLE = True
 except ImportError:
     GROQ_AVAILABLE = False
-    st.error("Failed to install/import groq package")
-# --- Imports ---
+    st.error("❌ Failed to import groq")
+    st.stop()
+
 try:
     from transformers import Wav2Vec2Processor, Wav2Vec2ForCTC
     TRANSFORMERS_AVAILABLE = True
 except ImportError:
     TRANSFORMERS_AVAILABLE = False
+    st.error("❌ Failed to import transformers")
+    st.stop()
 
 try:
     from audio_recorder_streamlit import audio_recorder
     AUDIO_RECORDER_AVAILABLE = True
 except ImportError:
     AUDIO_RECORDER_AVAILABLE = False
+    st.error("❌ audio_recorder_streamlit not available")
+    st.stop()
 
 try:
     import edge_tts
     EDGE_TTS_AVAILABLE = True
 except ImportError:
     EDGE_TTS_AVAILABLE = False
+    st.warning("⚠️ TTS (edge-tts) not available")
 
 try:
     import librosa
     LIBROSA_AVAILABLE = True
 except ImportError:
     LIBROSA_AVAILABLE = False
+    st.warning("⚠️ librosa not available (needed for resampling)")
 
 try:
     from pydub import AudioSegment
     PYDUB_AVAILABLE = True
 except ImportError:
     PYDUB_AVAILABLE = False
+    st.warning("⚠️ pydub not available (used for audio enhancement)")
 
 # --- Constants ---
 MAX_TTS_LENGTH = 800
@@ -131,7 +158,7 @@ def init_session_state():
 
 init_session_state()
 
-# --- Enhanced CSS (Full Width & Modern Styling) ---
+# --- Enhanced CSS ---
 st.markdown("""
 <style>
     .main-header {
@@ -226,7 +253,8 @@ class StreamlitVoiceAssistant:
             st.sidebar.success("✅ Groq Connected!")
             set_session_var('api_initialized', True)
             return True
-        except Exception:
+        except Exception as e:
+            st.sidebar.error(f"❌ Groq init failed: {str(e)}")
             set_session_var('api_initialized', False)
             return False
 
@@ -241,6 +269,7 @@ class StreamlitVoiceAssistant:
             logger.info("Wav2Vec model loaded")
         except Exception as e:
             logger.error(f"Wav2Vec load error: {e}")
+            st.sidebar.error("❌ Failed to load Wav2Vec model")
 
     def transcribe_audio(self, audio_bytes):
         try:
@@ -251,51 +280,27 @@ class StreamlitVoiceAssistant:
             if not audio_bytes or len(audio_bytes) < 1000:
                 return None
 
-            # --- Preprocess with pydub ---
-            if PYDUB_AVAILABLE:
-                try:
-                    audio_segment = AudioSegment.from_file(io.BytesIO(audio_bytes), format="wav")
-                    audio_segment = audio_segment.strip_silence(silence_len=50, silence_thresh=-40)
-                    target_dBFS = -20.0
-                    change_in_dBFS = target_dBFS - audio_segment.dBFS
-                    audio_segment = audio_segment.apply_gain(change_in_dBFS)
-                    sample_rate = audio_segment.frame_rate
-                    samples = [s.raw_data for s in audio_segment.split_to_mono()]
-                    audio_input = np.frombuffer(samples[0], dtype=np.int16).astype(np.float32)
-                    audio_input /= 32768.0
-                except Exception:
-                    temp_path = None
-                    try:
-                        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as f:
-                            f.write(audio_bytes)
-                            temp_path = f.name
-                        audio_input, sample_rate = sf.read(temp_path)
-                        if len(audio_input.shape) > 1:
-                            audio_input = audio_input.mean(axis=1)
-                    finally:
-                        if temp_path and os.path.exists(temp_path):
-                            os.unlink(temp_path)
-            else:
-                temp_path = None
-                try:
-                    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as f:
-                        f.write(audio_bytes)
-                        temp_path = f.name
-                    audio_input, sample_rate = sf.read(temp_path)
-                    if len(audio_input.shape) > 1:
-                        audio_input = audio_input.mean(axis=1)
-                finally:
-                    if temp_path and os.path.exists(temp_path):
-                        os.unlink(temp_path)
+            temp_path = None
+            try:
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as f:
+                    f.write(audio_bytes)
+                    temp_path = f.name
+                audio_input, sample_rate = sf.read(temp_path)
+                if len(audio_input.shape) > 1:
+                    audio_input = audio_input.mean(axis=1)
+            finally:
+                if temp_path and os.path.exists(temp_path):
+                    os.unlink(temp_path)
 
-            # --- Resample to 16kHz ---
+            # Resample to 16kHz
             if sample_rate != 16000:
                 if not LIBROSA_AVAILABLE:
+                    st.warning("⚠️ Cannot resample: librosa not available")
                     return None
                 audio_input = librosa.resample(audio_input, orig_sr=sample_rate, target_sr=16000)
                 sample_rate = 16000
 
-            # --- Transcribe ---
+            # Transcribe
             inputs = processor(audio_input, sampling_rate=sample_rate, return_tensors="pt", padding=True)
             with torch.no_grad():
                 logits = model(inputs.input_values).logits
@@ -303,6 +308,7 @@ class StreamlitVoiceAssistant:
             transcription = processor.batch_decode(predicted_ids)[0].strip()
             if not transcription:
                 return None
+
             return {
                 'text': transcription,
                 'language': 'en',
@@ -311,6 +317,7 @@ class StreamlitVoiceAssistant:
             }
         except Exception as e:
             logger.error(f"Transcription error: {e}")
+            st.error("❌ Transcription failed. Check logs.")
             return None
 
     def get_ai_response(self, query, language='en'):
@@ -331,7 +338,9 @@ class StreamlitVoiceAssistant:
                 top_p=0.9
             )
             return response.choices[0].message.content.strip()
-        except Exception:
+        except Exception as e:
+            st.error("❌ AI response failed")
+            logger.error(f"AI response error: {e}")
             return None
 
     def text_to_speech_sync(self, text, language='en'):
@@ -343,6 +352,7 @@ class StreamlitVoiceAssistant:
             cache = get_session_var('audio_cache', {})
             if cache_key in cache:
                 return cache[cache_key]
+
             if len(text) > MAX_TTS_LENGTH:
                 text = '. '.join(text.split('. ')[:3]) + '.'
 
@@ -373,7 +383,8 @@ class StreamlitVoiceAssistant:
                 cache[cache_key] = mp3_data
                 set_session_var('audio_cache', cache)
                 return mp3_data
-        except Exception:
+        except Exception as e:
+            logger.error(f"TTS error: {e}")
             return None
 
     def create_audio_player(self, audio_bytes, unique_id=None):
@@ -389,8 +400,9 @@ class StreamlitVoiceAssistant:
                 </audio>
             </div>
             """, unsafe_allow_html=True)
-        except Exception:
-            pass
+        except Exception as e:
+            st.error("❌ Audio player failed")
+            logger.error(f"Audio player error: {e}")
 
 # --- UI Functions ---
 def display_feature_status():
@@ -409,7 +421,6 @@ def display_feature_status():
 def process_user_input(assistant, user_text, lang, conf, tts):
     set_session_var('total_interactions', get_session_var('total_interactions', 0) + 1)
     uid = str(uuid.uuid4())[:8]
-
     st.markdown('<div class="chat-message user-message">', unsafe_allow_html=True)
     st.markdown(f"**🎤 You:** {user_text}")
     if conf != 'Text Input':
@@ -418,7 +429,6 @@ def process_user_input(assistant, user_text, lang, conf, tts):
 
     with st.spinner("🧠 Thinking..."):
         response = assistant.get_ai_response(user_text, lang)
-
     if response:
         st.markdown('<div class="chat-message assistant-message">', unsafe_allow_html=True)
         st.markdown("**🤖 AI Assistant:**")
@@ -461,7 +471,8 @@ def main():
     display_feature_status()
 
     if not get_session_var('api_initialized'):
-        return
+        st.info("🔑 Please enter your Groq API key in the sidebar.")
+        st.stop()
 
     with st.sidebar:
         st.markdown("### ⚙️ Settings")
