@@ -6,6 +6,7 @@ import tempfile
 import base64
 import uuid
 import logging
+import subprocess  # Required for pip install
 import sys
 import io
 import numpy as np
@@ -20,54 +21,48 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- Auto-install missing packages with system-level support ---
-def install_and_import(package, package_name=None, system_package=None):
+# --- Auto-install missing packages ---
+def install_and_import(package, package_name=None):
     package_name = package_name or package
     try:
         __import__(package_name)
         return True
     except ImportError:
         try:
-            # If a system package is needed (e.g., libsndfile for soundfile)
-            if system_package:
-                st.info(f"🔧 Installing system dependency: {system_package}")
-                subprocess.run(["apt-get", "update"], check=True)
-                subprocess.run(["apt-get", "install", "-y", system_package], check=True)
-            
-            st.info(f"📦 Installing Python package: {package}")
+            st.info(f"📦 Installing {package}...")
             subprocess.check_call([sys.executable, "-m", "pip", "install", package])
             return True
         except Exception as e:
             st.error(f"❌ Failed to install {package}: {str(e)}")
             return False
 
-# Required packages with optional system dependencies
+# Required packages: (pip_name, import_name)
 required_packages = {
-    "groq": ("groq", None),
-    "transformers": ("transformers", None),
-    "torch": ("torch", None),
-    "soundfile": ("PySoundFile", "libsndfile1"),  # PySoundFile is the package, libsndfile1 is system dep
-    "librosa": ("librosa", None),
-    "pydub": ("pydub", None),
-    "audio_recorder_streamlit": ("audio_recorder_streamlit", None),
-    "edge_tts": ("edge-tts", None),
+    "groq": "groq",
+    "transformers": "transformers",
+    "torch": "torch",
+    "PySoundFile": "soundfile",  # Correct package name for soundfile
+    "librosa": "librosa",
+    "pydub": "pydub",
+    "audio-recorder-streamlit": "audio_recorder_streamlit",
+    "edge-tts": "edge_tts"
 }
 
-# Install all required packages
-for pkg, (imp, sys_pkg) in required_packages.items():
+# Install each package if not already present
+for pkg, imp in required_packages.items():
     if pkg not in sys.modules:
-        success = install_and_import(pkg, imp, sys_pkg)
+        success = install_and_import(pkg, imp)
         if not success:
-            st.error(f"🚨 Critical failure installing: {pkg}")
+            st.error(f"🚨 Critical failure: Could not install `{pkg}`. App may not work.")
             st.stop()
 
-# --- Import after installation ---
+# --- Now Import All Packages ---
 try:
     import soundfile as sf
     SNDFILE_AVAILABLE = True
 except ImportError:
     SNDFILE_AVAILABLE = False
-    st.error("❌ Failed to load soundfile even after installation.")
+    st.error("❌ Failed to import soundfile")
     st.stop()
 
 try:
@@ -99,7 +94,7 @@ try:
     AUDIO_RECORDER_AVAILABLE = True
 except ImportError:
     AUDIO_RECORDER_AVAILABLE = False
-    st.error("❌ audio_recorder_streamlit not available")
+    st.error("❌ Failed to import audio_recorder_streamlit")
     st.stop()
 
 try:
@@ -114,14 +109,14 @@ try:
     LIBROSA_AVAILABLE = True
 except ImportError:
     LIBROSA_AVAILABLE = False
-    st.warning("⚠️ librosa not available (needed for resampling)")
+    st.warning("⚠️ librosa not available")
 
 try:
     from pydub import AudioSegment
     PYDUB_AVAILABLE = True
 except ImportError:
     PYDUB_AVAILABLE = False
-    st.warning("⚠️ pydub not available (used for audio enhancement)")
+    st.warning("⚠️ pydub not available")
 
 # --- Constants ---
 MAX_TTS_LENGTH = 800
@@ -217,9 +212,6 @@ st.markdown("""
         font-weight: 600;
         border-radius: 10px;
     }
-    .css-1d391kg {
-        background-color: #f8f9fa;
-    }
     #MainMenu { visibility: hidden; }
     footer { visibility: hidden; }
 </style>
@@ -243,6 +235,7 @@ class StreamlitVoiceAssistant:
                     set_session_var('api_initialized', False)
                     return False
             client = Groq(api_key=api_key)
+            # Test request
             client.chat.completions.create(
                 messages=[{"role": "user", "content": "hi"}],
                 model="llama3-70b-8192",
@@ -280,6 +273,7 @@ class StreamlitVoiceAssistant:
             if not audio_bytes or len(audio_bytes) < 1000:
                 return None
 
+            # Save audio to temp file
             temp_path = None
             try:
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as f:
@@ -287,12 +281,12 @@ class StreamlitVoiceAssistant:
                     temp_path = f.name
                 audio_input, sample_rate = sf.read(temp_path)
                 if len(audio_input.shape) > 1:
-                    audio_input = audio_input.mean(axis=1)
+                    audio_input = audio_input.mean(axis=1)  # Convert to mono
             finally:
                 if temp_path and os.path.exists(temp_path):
                     os.unlink(temp_path)
 
-            # Resample to 16kHz
+            # Resample to 16kHz if needed
             if sample_rate != 16000:
                 if not LIBROSA_AVAILABLE:
                     st.warning("⚠️ Cannot resample: librosa not available")
@@ -317,7 +311,7 @@ class StreamlitVoiceAssistant:
             }
         except Exception as e:
             logger.error(f"Transcription error: {e}")
-            st.error("❌ Transcription failed. Check logs.")
+            st.error("❌ Transcription failed")
             return None
 
     def get_ai_response(self, query, language='en'):
