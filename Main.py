@@ -1,5 +1,3 @@
-# voice_assistant.py
-# Run with: streamlit run voice_assistant.py
 import streamlit as st
 import requests
 import json
@@ -8,14 +6,13 @@ import tempfile
 import base64
 import uuid
 import logging
-import torch
 import soundfile as sf
 import subprocess
 import sys
 import io
 import numpy as np
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime  # Updated import
+from datetime import datetime
 
 # --- Page Configuration (Full Width) ---
 st.set_page_config(
@@ -52,6 +49,15 @@ required_packages = {
 for pkg, imp in required_packages.items():
     if pkg not in sys.modules:
         install_and_import(pkg, imp)
+
+# --- Import torch AFTER auto-install ---
+try:
+    import torch
+    TORCH_AVAILABLE = True
+except ImportError:
+    TORCH_AVAILABLE = False
+    st.error("Failed to install/import torch package")
+
 # --- Now import groq after installation ---
 try:
     from groq import Groq
