@@ -6,9 +6,6 @@ import tempfile
 import base64
 import uuid
 import logging
-import subprocess
-import sys
-import io
 import numpy as np
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
@@ -21,111 +18,30 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- Auto-install missing packages ---
-def install_and_import(package, package_name=None):
-    package_name = package_name or package
-    try:
-        __import__(package_name)
-        return True
-    except ImportError:
-        try:
-            # Update pip first
-            st.info("🔧 Updating pip to latest version...")
-            subprocess.check_call([
-                sys.executable, "-m", "pip", "install", "--upgrade", "pip"
-            ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-            # Install package
-            st.info(f"📦 Installing {package}...")
-            subprocess.check_call([
-                sys.executable, "-m", "pip", "install", "--no-cache-dir", package
-            ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            return True
-        except Exception as e:
-            st.error(f"❌ Failed to install `{package}`: {str(e)}")
-            return False
-
-# Required packages: (pip_name, import_name)
-required_packages = {
-    "groq": "groq",
-    "transformers": "transformers",
-    "torch": "torch",
-    "PySoundFile": "soundfile",  
-    "librosa": "librosa",
-    "pydub": "pydub",
-    "audio-recorder-streamlit": "audio_recorder_streamlit",
-    "edge-tts": "edge_tts"
-}
-
-# Install each package if not already present
-for pkg, imp in required_packages.items():
-    if imp not in sys.modules:
-        success = install_and_import(pkg, imp)
-        if not success and pkg in ["groq", "transformers", "torch", "PySoundFile"]:
-            st.error(f"🚨 Critical failure: Could not install `{pkg}`. App may not work.")
-            st.stop()
-
-# --- Now Import All Packages ---
+# --- Import All Required Packages ---
 try:
     import soundfile as sf
-    SNDFILE_AVAILABLE = True
-except ImportError:
-    SNDFILE_AVAILABLE = False
-    st.error("❌ Failed to import soundfile")
-    st.stop()
-
-try:
     import torch
-    TORCH_AVAILABLE = True
-except ImportError:
-    TORCH_AVAILABLE = False
-    st.error("❌ Failed to import torch")
-    st.stop()
-
-try:
     from groq import Groq
-    GROQ_AVAILABLE = True
-except ImportError:
-    GROQ_AVAILABLE = False
-    st.error("❌ Failed to import groq")
-    st.stop()
-
-try:
     from transformers import Wav2Vec2Processor, Wav2Vec2ForCTC
-    TRANSFORMERS_AVAILABLE = True
-except ImportError:
-    TRANSFORMERS_AVAILABLE = False
-    st.error("❌ Failed to import transformers")
-    st.stop()
-
-try:
     from audio_recorder_streamlit import audio_recorder
-    AUDIO_RECORDER_AVAILABLE = True
-except ImportError:
-    AUDIO_RECORDER_AVAILABLE = False
-    st.error("❌ Failed to import audio_recorder_streamlit")
-    st.stop()
-
-try:
     import edge_tts
-    EDGE_TTS_AVAILABLE = True
-except ImportError:
-    EDGE_TTS_AVAILABLE = False
-    st.warning("⚠️ TTS (edge-tts) not available")
-
-try:
     import librosa
-    LIBROSA_AVAILABLE = True
-except ImportError:
-    LIBROSA_AVAILABLE = False
-    st.warning("⚠️ librosa not available")
-
-try:
     from pydub import AudioSegment
+    
+    # Set availability flags
+    SNDFILE_AVAILABLE = True
+    TORCH_AVAILABLE = True
+    GROQ_AVAILABLE = True
+    TRANSFORMERS_AVAILABLE = True
+    AUDIO_RECORDER_AVAILABLE = True
+    EDGE_TTS_AVAILABLE = True
+    LIBROSA_AVAILABLE = True
     PYDUB_AVAILABLE = True
-except ImportError:
-    PYDUB_AVAILABLE = False
-    st.warning("⚠️ pydub not available")
+    
+except ImportError as e:
+    st.error(f"❌ Missing required package: {str(e)}")
+    st.stop()
 
 # --- Constants ---
 MAX_TTS_LENGTH = 800
@@ -234,30 +150,25 @@ class StreamlitVoiceAssistant:
 
     def setup_groq(self):
         try:
-            api_key = st.secrets.get("GROQ_API_KEY") if hasattr(st, 'secrets') else os.environ.get("GROQ_API_KEY")
+            # Get API key from environment variable
+            api_key = os.environ.get("GROQ_API_KEY")
             if not api_key:
-                with st.sidebar:
-                    st.markdown("### 🔑 Groq API Key")
-                    api_key = st.text_input("Enter your Groq API Key", type="password", placeholder="gsk_xxx...")
-                    st.markdown("[Get Free API Key](https://console.groq.com/)")
-                if not api_key:
-                    set_session_var('api_initialized', False)
-                    return False
+                st.error("❌ GROQ_API_KEY environment variable not set")
+                st.stop()
             
             client = Groq(api_key=api_key)
-            # Test request
+            # Simple test request
             client.chat.completions.create(
                 messages=[{"role": "user", "content": "hi"}],
                 model="llama3-70b-8192",
-                max_tokens=5,
-                timeout=10
+                max_tokens=5
             )
             set_session_var('groq_client', client)
             st.sidebar.success("✅ Groq Connected!")
             set_session_var('api_initialized', True)
             return True
         except Exception as e:
-            st.sidebar.error(f"❌ Groq init failed: {str(e)}")
+            st.sidebar.error(f"❌ Groq connection failed: {str(e)}")
             set_session_var('api_initialized', False)
             return False
 
@@ -297,10 +208,7 @@ class StreamlitVoiceAssistant:
                     os.unlink(temp_path)
 
             # Resample to 16kHz if needed
-            if sample_rate != 16000:
-                if not LIBROSA_AVAILABLE:
-                    st.warning("⚠️ Cannot resample: librosa not available")
-                    return None
+            if sample_rate != 16000 and LIBROSA_AVAILABLE:
                 audio_input = librosa.resample(audio_input, orig_sr=sample_rate, target_sr=16000)
                 sample_rate = 16000
 
@@ -475,7 +383,7 @@ def main():
     display_feature_status()
 
     if not get_session_var('api_initialized'):
-        st.info("🔑 Please enter your Groq API key in the sidebar.")
+        st.error("❌ Groq API not initialized. Please check your API key.")
         st.stop()
 
     with st.sidebar:
