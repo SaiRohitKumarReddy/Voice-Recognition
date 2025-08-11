@@ -20,23 +20,21 @@ st.set_page_config(
 
 # --- Import All Required Packages ---
 try:
-    import soundfile as sf
+    import librosa  # Replaces soundfile
     import torch
     from groq import Groq
     from transformers import Wav2Vec2Processor, Wav2Vec2ForCTC
     from audio_recorder_streamlit import audio_recorder
     import edge_tts
-    import librosa
     from pydub import AudioSegment
     
     # Set availability flags
-    SNDFILE_AVAILABLE = True
+    LIBROSA_AVAILABLE = True
     TORCH_AVAILABLE = True
     GROQ_AVAILABLE = True
     TRANSFORMERS_AVAILABLE = True
     AUDIO_RECORDER_AVAILABLE = True
     EDGE_TTS_AVAILABLE = True
-    LIBROSA_AVAILABLE = True
     PYDUB_AVAILABLE = True
     
 except ImportError as e:
@@ -194,21 +192,22 @@ class StreamlitVoiceAssistant:
             if not audio_bytes or len(audio_bytes) < 1000:
                 return None
 
-            # Save audio to temp file
+            # Save audio to temp file and load with librosa
             temp_path = None
             try:
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as f:
                     f.write(audio_bytes)
                     temp_path = f.name
-                audio_input, sample_rate = sf.read(temp_path)
-                if len(audio_input.shape) > 1:
-                    audio_input = audio_input.mean(axis=1)  # Convert to mono
+                
+                # Load audio with librosa
+                audio_input, sample_rate = librosa.load(temp_path, sr=None, mono=True)
+                
             finally:
                 if temp_path and os.path.exists(temp_path):
                     os.unlink(temp_path)
 
             # Resample to 16kHz if needed
-            if sample_rate != 16000 and LIBROSA_AVAILABLE:
+            if sample_rate != 16000:
                 audio_input = librosa.resample(audio_input, orig_sr=sample_rate, target_sr=16000)
                 sample_rate = 16000
 
