@@ -12,8 +12,7 @@ from datetime import datetime
 
 # --- Page Configuration ---
 st.set_page_config(
-    page_title="🎙️ Voice AI Assistant",
-    page_icon="🎙️",
+    page_title="🎙Voice AI Assistant",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -38,7 +37,7 @@ try:
     PYDUB_AVAILABLE = True
     
 except ImportError as e:
-    st.error(f"❌ Missing required package: {str(e)}")
+    st.error(f"Missing required package: {str(e)}")
     st.stop()
 
 # --- Constants ---
@@ -151,7 +150,7 @@ class StreamlitVoiceAssistant:
             # Get API key from environment variable
             api_key = os.environ.get("GROQ_API_KEY")
             if not api_key:
-                st.error("❌ GROQ_API_KEY environment variable not set")
+                st.error("GROQ_API_KEY environment variable not set")
                 st.stop()
             
             client = Groq(api_key=api_key)
@@ -162,11 +161,11 @@ class StreamlitVoiceAssistant:
                 max_tokens=5
             )
             set_session_var('groq_client', client)
-            st.sidebar.success("✅ Groq Connected!")
+            st.sidebar.success("Groq Connected!")
             set_session_var('api_initialized', True)
             return True
         except Exception as e:
-            st.sidebar.error(f"❌ Groq connection failed: {str(e)}")
+            st.sidebar.error(f"Groq connection failed: {str(e)}")
             set_session_var('api_initialized', False)
             return False
 
@@ -177,11 +176,11 @@ class StreamlitVoiceAssistant:
             model = Wav2Vec2ForCTC.from_pretrained(model_name)
             set_session_var('wav2vec_processor', processor)
             set_session_var('wav2vec_model', model)
-            st.sidebar.success("🎙️ Wav2Vec Ready!")
+            st.sidebar.success("🎙Wav2Vec Ready!")
             logger.info("Wav2Vec model loaded")
         except Exception as e:
             logger.error(f"Wav2Vec load error: {e}")
-            st.sidebar.error("❌ Failed to load Wav2Vec model")
+            st.sidebar.error("Failed to load Wav2Vec model")
 
     def transcribe_audio(self, audio_bytes):
         try:
@@ -228,7 +227,7 @@ class StreamlitVoiceAssistant:
             }
         except Exception as e:
             logger.error(f"Transcription error: {e}")
-            st.error("❌ Transcription failed")
+            st.error("Transcription failed")
             return None
 
     def get_ai_response(self, query, language='en'):
@@ -250,7 +249,7 @@ class StreamlitVoiceAssistant:
             )
             return response.choices[0].message.content.strip()
         except Exception as e:
-            st.error("❌ AI response failed")
+            st.error("AI response failed")
             logger.error(f"AI response error: {e}")
             return None
 
@@ -312,21 +311,21 @@ class StreamlitVoiceAssistant:
             </div>
             """, unsafe_allow_html=True)
         except Exception as e:
-            st.error("❌ Audio player failed")
+            st.error("Audio player failed")
             logger.error(f"Audio player error: {e}")
 
 # --- UI Functions ---
 def display_feature_status():
-    st.markdown("### 🛠️ Feature Status")
+    st.markdown("###Feature Status")
     cols = st.columns(3)
     with cols[0]:
-        st.markdown(f'<div class="feature-status">🎙️ Voice: {"✅" if AUDIO_RECORDER_AVAILABLE else "❌"}</div>',
+        st.markdown(f'<div class="feature-status">Voice { "" if AUDIO_RECORDER_AVAILABLE else "" }</div>',
                     unsafe_allow_html=True)
     with cols[1]:
-        st.markdown(f'<div class="feature-status">🔊 TTS: {"✅" if EDGE_TTS_AVAILABLE else "❌"}</div>',
+        st.markdown(f'<div class="feature-status">TTS {"" if EDGE_TTS_AVAILABLE else ""}</div>',
                     unsafe_allow_html=True)
     with cols[2]:
-        st.markdown(f'<div class="feature-status">🧠 AI: {"✅" if get_session_var("api_initialized") else "❌"}</div>',
+        st.markdown(f'<div class="feature-status">AI {"" if get_session_var("api_initialized") else ""}</div>',
                     unsafe_allow_html=True)
 
 def process_user_input(assistant, user_text, lang, conf, tts):
@@ -338,17 +337,17 @@ def process_user_input(assistant, user_text, lang, conf, tts):
         st.markdown(f"*Confidence: {conf}*")
     st.markdown('</div>', unsafe_allow_html=True)
 
-    with st.spinner("🧠 Thinking..."):
+    with st.spinner("Thinking..."):
         response = assistant.get_ai_response(user_text, lang)
     if response:
         st.markdown('<div class="chat-message assistant-message">', unsafe_allow_html=True)
-        st.markdown("**🤖 AI Assistant:**")
+        st.markdown("**AI Assistant:**")
         st.markdown(response)
         if tts and EDGE_TTS_AVAILABLE:
-            with st.spinner("🔊 Generating speech..."):
+            with st.spinner(" Generating speech..."):
                 audio = assistant.text_to_speech_sync(response)
                 if audio:
-                    st.markdown("**🎧 Audio Response:**")
+                    st.markdown("**Audio Response:**")
                     assistant.create_audio_player(audio, f"tts_{uid}")
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -365,31 +364,31 @@ def display_history():
     history = get_session_var('conversation_history', [])
     if history:
         st.markdown("---")
-        st.markdown("### 🕰️ Recent Chats")
+        st.markdown("### Recent Chats")
         for i, h in enumerate(reversed(history[-5:])):
-            with st.expander(f"💬 Chat {len(history) - i} - {h['timestamp']}"):
+            with st.expander(f"Chat {len(history) - i} - {h['timestamp']}"):
                 st.markdown(f"**You:** {h['user_text']}")
                 st.markdown(f"**AI:** {h['ai_response']}")
 
 # --- Main App ---
 def main():
     init_session_state()
-    st.markdown('<h1 class="main-header">🎙️ Voice AI Assistant</h1>', unsafe_allow_html=True)
-    st.markdown('<p style="text-align:center;color:#555;">Ask in voice — powered by Groq & Wav2Vec2</p>',
+    st.markdown('<h1 class="main-header">Voice AI Assistant</h1>', unsafe_allow_html=True)
+    st.markdown('<p style="text-align:center;color:#555;"></p>',
                 unsafe_allow_html=True)
 
     assistant = StreamlitVoiceAssistant()
     display_feature_status()
 
     if not get_session_var('api_initialized'):
-        st.error("❌ Groq API not initialized. Please check your API key.")
+        st.error("Groq API not initialized. Please check your API key.")
         st.stop()
 
     with st.sidebar:
-        st.markdown("### ⚙️ Settings")
-        enable_tts = st.checkbox("🔊 Text-to-Speech", EDGE_TTS_AVAILABLE)
-        st.metric("🗨️ Chats", get_session_var('total_interactions', 0))
-        if st.button("🗑️ Clear History"):
+        st.markdown("### Settings")
+        enable_tts = st.checkbox("Text-to-Speech", EDGE_TTS_AVAILABLE)
+        st.metric("Chats", get_session_var('total_interactions', 0))
+        if st.button("Clear History"):
             for k in ['conversation_history', 'total_interactions', 'audio_cache']:
                 set_session_var(k, [] if 'history' in k else (0 if 'interactions' in k else {}))
             st.rerun()
@@ -397,10 +396,10 @@ def main():
     # --- Voice Input ---
     if AUDIO_RECORDER_AVAILABLE:
         st.markdown('<div class="audio-container">', unsafe_allow_html=True)
-        st.markdown("### 🎤 Speak Your Question")
-        st.markdown("🔊 Speak clearly into the mic.")
+        st.markdown("###Speak Your Question")
+        st.markdown("Speak clearly into the mic.")
         audio_bytes = audio_recorder(
-            text="🎙️ Hold to Record",
+            text="Hold to Record",
             recording_color="#e74c3c",
             neutral_color="#27ae60",
             icon_name="microphone",
@@ -411,7 +410,7 @@ def main():
 
         if audio_bytes and len(audio_bytes) > 500:
             st.audio(audio_bytes, format="audio/wav")
-            with st.spinner("📝 Transcribing..."):
+            with st.spinner("Transcribing..."):
                 result = assistant.transcribe_audio(audio_bytes)
             if result:
                 process_user_input(
@@ -423,12 +422,12 @@ def main():
                 )
 
     # --- Text Input ---
-    st.markdown("### ✍️ Or Type Your Question")
+    st.markdown("### Type Your Question")
     col1, col2 = st.columns([4, 1])
     with col1:
         text_input = st.text_input("Your query:", placeholder="Explain quantum computing", key="text_input")
     with col2:
-        send_btn = st.button("🚀 Send", key="send")
+        send_btn = st.button("Send", key="send")
 
     if send_btn and text_input.strip():
         process_user_input(
@@ -441,7 +440,7 @@ def main():
 
     display_history()
     st.markdown("---")
-    st.markdown("<p style='text-align:center;color:#777;'>🎙️ Voice AI Assistant | Powered by Groq & Local Wav2Vec2</p>",
+    st.markdown("<p style='text-align:center;color:#777;'>Voice AI Assistant</p>",
                 unsafe_allow_html=True)
 
 if __name__ == "__main__":
