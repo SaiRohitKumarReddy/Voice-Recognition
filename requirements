@@ -1,0 +1,10 @@
+streamlit
+requests
+groq
+transformers
+torch
+soundfile
+librosa
+pydub
+audio-recorder-streamlit
+edge-tts
