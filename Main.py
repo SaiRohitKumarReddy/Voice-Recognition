@@ -2,7 +2,6 @@
 # Run with: streamlit run voice_assistant.py
 import streamlit as st
 import requests
-from groq import Groq
 import json
 import os
 import tempfile
@@ -40,6 +39,7 @@ def install_and_import(package, package_name=None):
             return False
 
 required_packages = {
+    "groq": "groq",
     "transformers": "transformers",
     "torch": "torch",
     "soundfile": "soundfile",
@@ -52,7 +52,13 @@ required_packages = {
 for pkg, imp in required_packages.items():
     if pkg not in sys.modules:
         install_and_import(pkg, imp)
-
+# --- Now import groq after installation ---
+try:
+    from groq import Groq
+    GROQ_AVAILABLE = True
+except ImportError:
+    GROQ_AVAILABLE = False
+    st.error("Failed to install/import groq package")
 # --- Imports ---
 try:
     from transformers import Wav2Vec2Processor, Wav2Vec2ForCTC
