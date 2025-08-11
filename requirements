@@ -3,6 +3,8 @@ requests
 groq
 transformers
 torch
+torchvision
+torchaudio
 soundfile
 librosa
 pydub
