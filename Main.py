@@ -12,7 +12,7 @@ from datetime import datetime
 
 # --- Page Configuration ---
 st.set_page_config(
-    page_title="🎙Voice AI Assistant",
+    page_title="Voice AI Assistant",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -161,7 +161,7 @@ class StreamlitVoiceAssistant:
                 max_tokens=5
             )
             set_session_var('groq_client', client)
-            st.sidebar.success("Groq Connected!")
+            st.sidebar.success("Groq Connected")
             set_session_var('api_initialized', True)
             return True
         except Exception as e:
