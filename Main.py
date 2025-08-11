@@ -29,11 +29,20 @@ def install_and_import(package, package_name=None):
         return True
     except ImportError:
         try:
+            # Update pip first
+            st.info("🔧 Updating pip to latest version...")
+            subprocess.check_call([
+                sys.executable, "-m", "pip", "install", "--upgrade", "pip"
+            ])
+
+            # Install package
             st.info(f"📦 Installing {package}...")
-            subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+            subprocess.check_call([
+                sys.executable, "-m", "pip", "install", "--no-cache-dir", package
+            ])
             return True
         except Exception as e:
-            st.error(f"❌ Failed to install {package}: {str(e)}")
+            st.error(f"❌ Failed to install `{package}`: {str(e)}")
             return False
 
 # Required packages: (pip_name, import_name)
@@ -41,7 +50,7 @@ required_packages = {
     "groq": "groq",
     "transformers": "transformers",
     "torch": "torch",
-    "PySoundFile": "soundfile",  # Correct package name for soundfile
+    "PySoundFile": "soundfile",  
     "librosa": "librosa",
     "pydub": "pydub",
     "audio-recorder-streamlit": "audio_recorder_streamlit",
