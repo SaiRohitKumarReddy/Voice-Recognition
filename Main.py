@@ -6,7 +6,7 @@ import tempfile
 import base64
 import uuid
 import logging
-import subprocess  # Required for pip install
+import subprocess
 import sys
 import io
 import numpy as np
@@ -33,13 +33,13 @@ def install_and_import(package, package_name=None):
             st.info("🔧 Updating pip to latest version...")
             subprocess.check_call([
                 sys.executable, "-m", "pip", "install", "--upgrade", "pip"
-            ])
+            ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
             # Install package
             st.info(f"📦 Installing {package}...")
             subprocess.check_call([
                 sys.executable, "-m", "pip", "install", "--no-cache-dir", package
-            ])
+            ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             return True
         except Exception as e:
             st.error(f"❌ Failed to install `{package}`: {str(e)}")
@@ -59,9 +59,9 @@ required_packages = {
 
 # Install each package if not already present
 for pkg, imp in required_packages.items():
-    if pkg not in sys.modules:
+    if imp not in sys.modules:
         success = install_and_import(pkg, imp)
-        if not success:
+        if not success and pkg in ["groq", "transformers", "torch", "PySoundFile"]:
             st.error(f"🚨 Critical failure: Could not install `{pkg}`. App may not work.")
             st.stop()
 
@@ -243,6 +243,7 @@ class StreamlitVoiceAssistant:
                 if not api_key:
                     set_session_var('api_initialized', False)
                     return False
+            
             client = Groq(api_key=api_key)
             # Test request
             client.chat.completions.create(
