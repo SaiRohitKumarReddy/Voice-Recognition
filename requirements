@@ -5,8 +5,7 @@ transformers
 torch
 torchvision
 torchaudio
-PySoundFile
-libsndfile1
+soundFile
 librosa
 pydub
 audio-recorder-streamlit
