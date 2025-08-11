@@ -176,7 +176,7 @@ class StreamlitVoiceAssistant:
             model = Wav2Vec2ForCTC.from_pretrained(model_name)
             set_session_var('wav2vec_processor', processor)
             set_session_var('wav2vec_model', model)
-            st.sidebar.success("🎙Wav2Vec Ready!")
+            st.sidebar.success("Wav2Vec Ready")
             logger.info("Wav2Vec model loaded")
         except Exception as e:
             logger.error(f"Wav2Vec load error: {e}")
@@ -316,7 +316,7 @@ class StreamlitVoiceAssistant:
 
 # --- UI Functions ---
 def display_feature_status():
-    st.markdown("###Feature Status")
+    st.markdown("Feature Status")
     cols = st.columns(3)
     with cols[0]:
         st.markdown(f'<div class="feature-status">Voice { "" if AUDIO_RECORDER_AVAILABLE else "" }</div>',
@@ -396,7 +396,7 @@ def main():
     # --- Voice Input ---
     if AUDIO_RECORDER_AVAILABLE:
         st.markdown('<div class="audio-container">', unsafe_allow_html=True)
-        st.markdown("###Speak Your Question")
+        st.markdown("Speak Your Question")
         st.markdown("Speak clearly into the mic.")
         audio_bytes = audio_recorder(
             text="Hold to Record",
